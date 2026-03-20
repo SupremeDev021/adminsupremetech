@@ -1,6 +1,6 @@
 // === CONEXÃO COM O BANCO DE DADOS (SUPABASE) ===
 const SUPABASE_URL = 'https://hhyvtehbsfoeuagwhklm.supabase.co';
-const SUPABASE_KEY = 'COLE_AQUI_A_SUA_PUBLISHKEY_COMPLETA'; // <--- COLE SUA CHAVE AQUI
+const SUPABASE_KEY = 'sb_publishable_S9oWEYBafLstrVI2SJQ9uA_ijH5Ph9e'; // <--- COLE SUA CHAVE AQUI
 
 const supabaseClient = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
 
