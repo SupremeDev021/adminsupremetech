@@ -6,21 +6,51 @@ const supabaseClient = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
 
 let clientesReais = [];
 
+// === MOTOR DE NOTIFICAÇÕES (TOAST) ===
+function mostrarToast(mensagem, tipo = 'success') {
+    let container = document.getElementById('toast-container');
+    if(!container) {
+        container = document.createElement('div');
+        container.id = 'toast-container';
+        document.body.appendChild(container);
+    }
+    const toast = document.createElement('div');
+    toast.className = `toast-msg ${tipo}`;
+    toast.innerHTML = mensagem;
+    container.appendChild(toast);
+    
+    // Animação de entrada e saída
+    setTimeout(() => toast.classList.add('show'), 10);
+    setTimeout(() => {
+        toast.classList.remove('show');
+        setTimeout(() => toast.remove(), 400); // Remove do HTML depois de sumir
+    }, 3500); // Fica na tela por 3.5 segundos
+}
+
+// === MEMÓRIA DE SESSÃO DO ADMIN ===
+window.onload = () => {
+    if(localStorage.getItem('admin_supreme_logado') === 'true') {
+        document.getElementById('login-admin').style.display = 'none';
+        document.getElementById('admin-panel').style.display = 'flex';
+        carregarTabelaDoBanco();
+    }
+};
 // 1. LOGIN MASTER
 async function entrarAdmin(e) {
     e.preventDefault();
     const senha = document.getElementById('admin-senha').value;
-    
     if(senha === 'master123') { 
+        localStorage.setItem('admin_supreme_logado', 'true'); // <--- GRAVA A MEMÓRIA
         document.getElementById('login-admin').style.display = 'none';
         document.getElementById('admin-panel').style.display = 'flex';
         await carregarTabelaDoBanco();
+        mostrarToast('👋 Bem-vindo de volta, Master!', 'success'); // <--- AVISA COM TOAST
     } else {
         document.getElementById('erro-login').style.display = 'block';
     }
 }
-
 function sairAdmin() {
+    localStorage.removeItem('admin_supreme_logado'); // <--- APAGA A MEMÓRIA
     document.getElementById('admin-panel').style.display = 'none';
     document.getElementById('login-admin').style.display = 'flex';
     document.getElementById('form-login').reset();
@@ -77,27 +107,27 @@ function atualizarDashboard() {
 
 // 4. RENDERIZAR A TABELA COM STATUS, E-MAIL, INSTÂNCIA E EXCLUIR
 function renderizarTabela() {
+    const termoBusca = document.getElementById('busca-cliente') ? document.getElementById('busca-cliente').value.toLowerCase() : '';
     const tbody = document.getElementById('tabela-clientes');
     tbody.innerHTML = ''; 
 
-    if (clientesReais.length === 0) {
-        // Ajustei o colspan para 8 por causa da nova coluna
-        tbody.innerHTML = '<tr><td colspan="8" style="text-align:center;">Nenhum cliente cadastrado ainda.</td></tr>';
+    // A MÁGICA DO FILTRO: Verifica se o que você digitou existe no nome, email ou instância
+    const clientesFiltrados = clientesReais.filter(c => 
+        c.nome_empresa.toLowerCase().includes(termoBusca) || 
+        c.email.toLowerCase().includes(termoBusca) || 
+        (c.nome_instancia && c.nome_instancia.toLowerCase().includes(termoBusca))
+    );
+
+    if (clientesFiltrados.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="8" style="text-align:center;">Nenhum cliente encontrado.</td></tr>';
         return;
     }
 
-    clientesReais.forEach(c => {
+    clientesFiltrados.forEach(c => {
+        // ... (MANTENHA EXATAMENTE O MESMO CÓDIGO QUE VOCÊ JÁ TEM AQUI DENTRO PARA DESENHAR AS LINHAS DA TABELA)
         let statusAtual = c.status || 'ativo'; 
-        
-        let badge = statusAtual === 'ativo' 
-            ? '<span class="badge badge-active">🟢 ATIVO</span>' 
-            : '<span class="badge badge-suspended">🔴 SUSPENSO</span>';
-        
-        let botaoAcao = statusAtual === 'ativo'
-            ? `<button class="btn-action suspend" onclick="mudarStatus(${c.id}, 'suspenso')">Cortar Acesso</button>`
-            : `<button class="btn-action reactivate" onclick="mudarStatus(${c.id}, 'ativo')">Reativar Conta</button>`;
-
-        // Se por acaso um cliente antigo não tiver instância, mostra "N/A" (Não Aplicável)
+        let badge = statusAtual === 'ativo' ? '<span class="badge badge-active">🟢 ATIVO</span>' : '<span class="badge badge-suspended">🔴 SUSPENSO</span>';
+        let botaoAcao = statusAtual === 'ativo' ? `<button class="btn-action suspend" onclick="mudarStatus(${c.id}, 'suspenso')">Cortar Acesso</button>` : `<button class="btn-action reactivate" onclick="mudarStatus(${c.id}, 'ativo')">Reativar Conta</button>`;
         let nomeInstancia = c.nome_instancia ? c.nome_instancia : '<span style="color:gray;">N/A</span>';
 
         tbody.innerHTML += `
@@ -105,14 +135,15 @@ function renderizarTabela() {
                 <td style="color: var(--primary);">#${c.id}</td>
                 <td style="color: #fff; font-weight: bold;">${c.nome_empresa}</td>
                 <td style="color: var(--text-muted); font-size: 12px;">${c.email}</td>
-                <td style="color: #00d2ff; font-family: monospace;">${nomeInstancia}</td> <td style="text-transform: capitalize;">${c.segmento}</td>
+                <td style="color: #00d2ff; font-family: monospace;">${nomeInstancia}</td>
+                <td style="text-transform: capitalize;">${c.segmento}</td>
                 <td style="text-transform: capitalize;">${c.plano}</td>
                 <td>${badge}</td>
                 <td>
                     ${botaoAcao}
-                    <button class="btn-action" style="margin-left: 5px;" onclick="alert('Senha deste cliente: ${c.senha}')">🔑</button>
-                    <button class="btn-action" style="margin-left: 5px; color: #ffc107; border-color: #ffc107;" onclick="abrirModalEdicao(${c.id})" title="Editar Cliente">✏️</button>
-                    <button class="btn-action" style="margin-left: 5px; color: var(--danger); border-color: var(--danger);" onclick="excluirCliente(${c.id})" title="Excluir Cliente">🗑️</button>
+                    <button class="btn-action" style="margin-left: 5px;" onclick="alert('Senha: ${c.senha}')">🔑</button>
+                    <button class="btn-action" style="margin-left: 5px; color: #ffc107; border-color: #ffc107;" onclick="abrirModalEdicao(${c.id})" title="Editar">✏️</button>
+                    <button class="btn-action" style="margin-left: 5px; color: var(--danger); border-color: var(--danger);" onclick="excluirCliente(${c.id})" title="Excluir">🗑️</button>
                 </td>
             </tr>
         `;
