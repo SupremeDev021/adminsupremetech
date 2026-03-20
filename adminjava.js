@@ -165,8 +165,9 @@ async function cadastrarCliente(e) {
             segmento: dados.segmento, 
             plano: dados.plano,
             valor_implantacao: dados.valor_implantacao, 
-            valor_mensalidade: dados.valor_mensalidade  
+            valor_mensalidade: dados.valor_mensalidade,
             nome_instancia: dados.nome_instancia
+    
         }])
         .select();
 
