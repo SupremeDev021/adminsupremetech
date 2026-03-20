@@ -215,3 +215,69 @@ async function excluirCliente(id) {
         }
     }
 }
+// ==========================================
+// SISTEMA DE EDIÇÃO DE CLIENTES
+// ==========================================
+function abrirModalEdicao(id) {
+    // 1. Acha o cliente na lista pelo ID
+    const cliente = clientesReais.find(c => c.id === id);
+    if (!cliente) return;
+
+    // 2. Preenche os campos do modal com os dados dele
+    document.getElementById('edit-id').value = cliente.id;
+    document.getElementById('edit-nome').value = cliente.nome_empresa;
+    document.getElementById('edit-email').value = cliente.email;
+    document.getElementById('edit-instancia').value = cliente.nome_instancia || '';
+    document.getElementById('edit-segmento').value = cliente.segmento;
+    document.getElementById('edit-plano').value = cliente.plano;
+    document.getElementById('edit-setup').value = cliente.valor_implantacao;
+    document.getElementById('edit-mensalidade').value = cliente.valor_mensalidade;
+    document.getElementById('edit-senha').value = cliente.senha;
+
+    // 3. Mostra a janela flutuante
+    document.getElementById('modal-edicao').style.display = 'flex';
+}
+
+function fecharModalEdicao() {
+    document.getElementById('modal-edicao').style.display = 'none';
+}
+
+async function salvarEdicao(e) {
+    e.preventDefault();
+    const form = e.target;
+    const btnSubmit = form.querySelector('button[type="submit"]');
+    const txtOrig = btnSubmit.innerText;
+    
+    btnSubmit.innerText = "Atualizando Cofre...";
+
+    const id = document.getElementById('edit-id').value;
+    
+    // Monta o pacote com os dados novos
+    const dadosAtualizados = {
+        nome_empresa: document.getElementById('edit-nome').value,
+        email: document.getElementById('edit-email').value,
+        nome_instancia: document.getElementById('edit-instancia').value,
+        segmento: document.getElementById('edit-segmento').value,
+        plano: document.getElementById('edit-plano').value,
+        valor_implantacao: document.getElementById('edit-setup').value,
+        valor_mensalidade: document.getElementById('edit-mensalidade').value,
+        senha: document.getElementById('edit-senha').value
+    };
+
+    // Manda para o Supabase substituir
+    const { error } = await supabaseClient
+        .from('clientes')
+        .update(dadosAtualizados)
+        .eq('id', id);
+
+    btnSubmit.innerText = txtOrig;
+
+    if (error) {
+        alert("Erro ao atualizar! Verifique se o e-mail já não pertence a outra empresa.");
+        console.error(error);
+    } else {
+        alert("✅ Dados atualizados com sucesso!");
+        fecharModalEdicao();
+        await carregarTabelaDoBanco(); // Recarrega a tabela para mostrar as mudanças
+    }
+}
