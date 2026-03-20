@@ -75,13 +75,13 @@ function atualizarDashboard() {
     document.querySelectorAll('.stat-card .value')[2].innerText = `R$ ${receitaMensal.toFixed(2).replace('.', ',')}`;
 }
 
-// 4. RENDERIZAR A TABELA COM STATUS REAL
+// 4. RENDERIZAR A TABELA COM STATUS, E-MAIL E EXCLUIR
 function renderizarTabela() {
     const tbody = document.getElementById('tabela-clientes');
     tbody.innerHTML = ''; 
 
     if (clientesReais.length === 0) {
-        tbody.innerHTML = '<tr><td colspan="6" style="text-align:center;">Nenhum cliente cadastrado ainda.</td></tr>';
+        tbody.innerHTML = '<tr><td colspan="7" style="text-align:center;">Nenhum cliente cadastrado ainda.</td></tr>';
         return;
     }
 
@@ -100,12 +100,14 @@ function renderizarTabela() {
             <tr>
                 <td style="color: var(--primary);">#${c.id}</td>
                 <td style="color: #fff; font-weight: bold;">${c.nome_empresa}</td>
+                <td style="color: var(--text-muted); font-size: 12px;">${c.email}</td>
                 <td style="text-transform: capitalize;">${c.segmento}</td>
                 <td style="text-transform: capitalize;">${c.plano}</td>
                 <td>${badge}</td>
                 <td>
                     ${botaoAcao}
-                    <button class="btn-action" style="margin-left: 5px;" onclick="alert('Senha deste cliente: ${c.senha}')">🔑 Ver Senha</button>
+                    <button class="btn-action" style="margin-left: 5px;" onclick="alert('Senha deste cliente: ${c.senha}')">🔑</button>
+                    <button class="btn-action" style="margin-left: 5px; color: var(--danger); border-color: var(--danger);" onclick="excluirCliente(${c.id})" title="Excluir Cliente">🗑️</button>
                 </td>
             </tr>
         `;
@@ -185,5 +187,24 @@ async function cadastrarCliente(e) {
         form.reset();
         await carregarTabelaDoBanco();
         navegarAdmin('sec-clientes', document.querySelectorAll('.menu-item')[1]);
+    }
+}
+// 8. EXCLUIR CLIENTE PERMANENTEMENTE
+async function excluirCliente(id) {
+    const confirmacao = confirm(`🚨 ATENÇÃO EXTREMA: Tem certeza que deseja DELETAR o cliente #${id} permanentemente?\n\nTodos os dados, cardápios e configurações dele serão apagados para sempre.`);
+    
+    if(confirmacao) {
+        const { error } = await supabaseClient
+            .from('clientes')
+            .delete()
+            .eq('id', id);
+
+        if (error) {
+            alert("Erro ao excluir cliente no servidor.");
+            console.error(error);
+        } else {
+            alert("Cliente excluído com sucesso.");
+            await carregarTabelaDoBanco(); 
+        }
     }
 }
