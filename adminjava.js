@@ -111,6 +111,7 @@ function renderizarTabela() {
                 <td>
                     ${botaoAcao}
                     <button class="btn-action" style="margin-left: 5px;" onclick="alert('Senha deste cliente: ${c.senha}')">🔑</button>
+                    <button class="btn-action" style="margin-left: 5px; color: #ffc107; border-color: #ffc107;" onclick="abrirModalEdicao(${c.id})" title="Editar Cliente">✏️</button>
                     <button class="btn-action" style="margin-left: 5px; color: var(--danger); border-color: var(--danger);" onclick="excluirCliente(${c.id})" title="Excluir Cliente">🗑️</button>
                 </td>
             </tr>
