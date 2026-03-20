@@ -75,13 +75,14 @@ function atualizarDashboard() {
     document.querySelectorAll('.stat-card .value')[2].innerText = `R$ ${receitaMensal.toFixed(2).replace('.', ',')}`;
 }
 
-// 4. RENDERIZAR A TABELA COM STATUS, E-MAIL E EXCLUIR
+// 4. RENDERIZAR A TABELA COM STATUS, E-MAIL, INSTÂNCIA E EXCLUIR
 function renderizarTabela() {
     const tbody = document.getElementById('tabela-clientes');
     tbody.innerHTML = ''; 
 
     if (clientesReais.length === 0) {
-        tbody.innerHTML = '<tr><td colspan="7" style="text-align:center;">Nenhum cliente cadastrado ainda.</td></tr>';
+        // Ajustei o colspan para 8 por causa da nova coluna
+        tbody.innerHTML = '<tr><td colspan="8" style="text-align:center;">Nenhum cliente cadastrado ainda.</td></tr>';
         return;
     }
 
@@ -96,12 +97,15 @@ function renderizarTabela() {
             ? `<button class="btn-action suspend" onclick="mudarStatus(${c.id}, 'suspenso')">Cortar Acesso</button>`
             : `<button class="btn-action reactivate" onclick="mudarStatus(${c.id}, 'ativo')">Reativar Conta</button>`;
 
+        // Se por acaso um cliente antigo não tiver instância, mostra "N/A" (Não Aplicável)
+        let nomeInstancia = c.nome_instancia ? c.nome_instancia : '<span style="color:gray;">N/A</span>';
+
         tbody.innerHTML += `
             <tr>
                 <td style="color: var(--primary);">#${c.id}</td>
                 <td style="color: #fff; font-weight: bold;">${c.nome_empresa}</td>
                 <td style="color: var(--text-muted); font-size: 12px;">${c.email}</td>
-                <td style="text-transform: capitalize;">${c.segmento}</td>
+                <td style="color: #00d2ff; font-family: monospace;">${nomeInstancia}</td> <td style="text-transform: capitalize;">${c.segmento}</td>
                 <td style="text-transform: capitalize;">${c.plano}</td>
                 <td>${badge}</td>
                 <td>
