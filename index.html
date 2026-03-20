@@ -91,22 +91,25 @@
                     <div class="box-header">
                         <h2>Cadastrar Nova Empresa</h2>
                     </div>
-                    <form onsubmit="cadastrarCliente(event)">
+                    <form id="form-novo-cliente" onsubmit="cadastrarCliente(event)">
+                        
                         <div class="input-group">
                             <label>Nome da Empresa (Fantasia)</label>
                             <input type="text" name="nome_empresa" class="form-control" placeholder="Ex: Clínica Dr. Marcos" required>
                         </div>
-                        
-                       <div class="row-inputs">
-                            <div class="input-group" style="flex: 2;">
+
+                        <div class="row-inputs">
+                            <div class="input-group" style="flex: 1;">
                                 <label>E-mail de Acesso (Login do Cliente)</label>
                                 <input type="email" name="email_cliente" class="form-control" placeholder="contato@empresa.com" required>
                             </div>
-                           <div class="input-group" style="flex: 1;">
                             <div class="input-group" style="flex: 1;">
-                            <label>Nome da Instância (Evolution API)</label>
-                            <input type="text" name="nome_instancia" class="form-control" placeholder="Ex: clinica_saude" required>
+                                <label>Nome da Instância (Evolution API)</label>
+                                <input type="text" name="nome_instancia" class="form-control" placeholder="Ex: clinica_saude" required>
+                            </div>
                         </div>
+
+                        <div class="row-inputs">
                             <div class="input-group" style="flex: 1;">
                                 <label>Segmento do Robô</label>
                                 <select name="segmento" class="form-control" required>
@@ -114,6 +117,15 @@
                                     <option value="restaurante">Delivery / Restaurante</option>
                                     <option value="petshop">Pet Shop</option>
                                     <option value="loja">Loja / Catálogo</option>
+                                    <option value="academia">Academia / CrossFit</option>
+                                </select>
+                            </div>
+                            <div class="input-group" style="flex: 1;">
+                                <label>Plano Contratado</label>
+                                <select name="plano" class="form-control" required>
+                                    <option value="supreme start">Supreme Start</option>
+                                    <option value="supreme pro">Supreme Pro</option>
+                                    <option value="supreme elite">Supreme Elite</option>
                                 </select>
                             </div>
                         </div>
@@ -128,27 +140,18 @@
                                 <input type="number" step="0.01" name="valor_mensalidade" class="form-control" placeholder="Ex: 130.00" required>
                             </div>
                         </div>
-                        <div class="row-inputs">
-                            <div class="input-group" style="flex: 1;">
-                                <label>Plano Contratado</label>
-                                <select name="plano" class="form-control" required>
-                                    <option value="supreme basic">Supreme Basic</option>
-                                    <option value="supreme super">Supreme Super</option>
-                                    <option value="supreme elite">Supreme Elite</option>
-                                </select>
-                            </div>
+
+                        <div class="row-inputs" style="align-items: flex-end;">
                             <div class="input-group" style="flex: 1;">
                                 <label>Senha de Acesso Inicial</label>
-                                <input type="text" id="senha-gerada" name="senha" class="form-control" placeholder="Clique em Gerar ->" required>
+                                <input type="text" id="senha-gerada" name="senha" class="form-control" placeholder="Clique em Gerar Senha" required readonly>
                             </div>
-                            <div class="input-group" style="flex: 1;">
-                                <label>&nbsp;</label>
-                                <button type="button" class="btn btn-generate" onclick="gerarSenha()">Gerar Senha Segura</button>
+                            <div style="display: flex; gap: 10px;">
+                                <button type="button" class="btn-action" style="height: 45px; padding: 0 15px;" onclick="gerarSenha()">GERAR SENHA SEGURA</button>
+                                <button type="submit" class="btn-salvar" style="height: 45px; padding: 0 20px; width: auto;">CRIAR CONTA E LIBERAR PAINEL</button>
                             </div>
                         </div>
 
-                        <hr style="border-color: var(--border-color); margin: 30px 0;">
-                        <button type="submit" class="btn btn-primary">Criar Conta e Liberar Painel</button>
                     </form>
                 </div>
             </div>
