@@ -158,7 +158,70 @@
 
         </div>
     </div>
+<div id="modal-edicao" style="display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.85); z-index: 9999; justify-content: center; align-items: center; backdrop-filter: blur(5px);">
+        <div class="section-panel active" style="width: 90%; max-width: 650px; padding: 30px; position: relative;">
+            <button type="button" onclick="fecharModalEdicao()" style="position: absolute; top: 15px; right: 20px; background: transparent; border: none; color: #fff; font-size: 20px; cursor: pointer;">✖</button>
+            
+            <h2 style="color: var(--primary); margin-bottom: 20px;">Editar Dados do Cliente</h2>
+            
+            <form id="form-editar-cliente" onsubmit="salvarEdicao(event)">
+                <input type="hidden" id="edit-id"> <div class="input-group">
+                    <label>Nome da Empresa (Fantasia)</label>
+                    <input type="text" id="edit-nome" class="form-control" required>
+                </div>
 
+                <div class="row-inputs">
+                    <div class="input-group" style="flex: 1;">
+                        <label>E-mail de Acesso</label>
+                        <input type="email" id="edit-email" class="form-control" required>
+                    </div>
+                    <div class="input-group" style="flex: 1;">
+                        <label>Instância (Evolution API)</label>
+                        <input type="text" id="edit-instancia" class="form-control">
+                    </div>
+                </div>
+
+                <div class="row-inputs">
+                    <div class="input-group" style="flex: 1;">
+                        <label>Segmento</label>
+                        <select id="edit-segmento" class="form-control" required>
+                            <option value="clinica">Clínica</option>
+                            <option value="restaurante">Delivery / Restaurante</option>
+                            <option value="petshop">Pet Shop</option>
+                            <option value="loja">Loja / Catálogo</option>
+                            <option value="academia">Academia / CrossFit</option>
+                        </select>
+                    </div>
+                    <div class="input-group" style="flex: 1;">
+                        <label>Plano Contratado</label>
+                        <select id="edit-plano" class="form-control" required>
+                            <option value="supreme start">Supreme Start</option>
+                            <option value="supreme pro">Supreme Pro</option>
+                            <option value="supreme elite">Supreme Elite</option>
+                        </select>
+                    </div>
+                </div>
+
+                <div class="row-inputs">
+                    <div class="input-group" style="flex: 1;">
+                        <label>Taxa de Setup (R$)</label>
+                        <input type="number" step="0.01" id="edit-setup" class="form-control" required>
+                    </div>
+                    <div class="input-group" style="flex: 1;">
+                        <label>Mensalidade (R$)</label>
+                        <input type="number" step="0.01" id="edit-mensalidade" class="form-control" required>
+                    </div>
+                </div>
+
+                <div class="input-group">
+                    <label>Senha de Acesso (Digite para alterar ou deixe como está)</label>
+                    <input type="text" id="edit-senha" class="form-control" required>
+                </div>
+
+                <button type="submit" class="btn-salvar" style="width: 100%; margin-top: 15px;">SALVAR ALTERAÇÕES NO SERVIDOR</button>
+            </form>
+        </div>
+    </div>
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 
     <script src="adminjava.js"></script>
