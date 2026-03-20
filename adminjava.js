@@ -39,7 +39,7 @@ window.onload = () => {
 async function entrarAdmin(e) {
     e.preventDefault();
     const senha = document.getElementById('admin-senha').value;
-    if(senha === 'master123') { 
+    if(senha === '69227100Jp@') { 
         localStorage.setItem('admin_supreme_logado', 'true'); // <--- GRAVA A MEMÓRIA
         document.getElementById('login-admin').style.display = 'none';
         document.getElementById('admin-panel').style.display = 'flex';
