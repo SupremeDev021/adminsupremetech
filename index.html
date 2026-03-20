@@ -61,8 +61,12 @@
 
             <div id="sec-clientes" class="section-panel">
                 <div class="box-panel">
-                    <div class="box-header">
-                        <h2>Base de Clientes</h2>
+                    
+                    <div class="box-header" style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 15px; margin-bottom: 20px;">
+                        <h2 style="margin: 0;">Base de Clientes</h2>
+                        
+                        <input type="text" id="busca-cliente" placeholder="🔍 Buscar por nome, e-mail ou instância..." class="form-control" style="flex: 1; min-width: 250px; max-width: 450px; margin: 0;" onkeyup="renderizarTabela()">
+                        
                         <button class="btn btn-primary" style="width: auto; padding: 8px 15px;" onclick="navegarAdmin('sec-novo', document.querySelectorAll('.menu-item')[2])">+ Novo Cliente</button>
                     </div>
                     <div class="table-responsive">
