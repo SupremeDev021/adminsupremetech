@@ -162,6 +162,7 @@ async function cadastrarCliente(e) {
             plano: dados.plano,
             valor_implantacao: dados.valor_implantacao, 
             valor_mensalidade: dados.valor_mensalidade  
+            nome_instancia: dados.nome_instancia
         }])
         .select();
 
