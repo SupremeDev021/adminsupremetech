@@ -116,7 +116,9 @@ async function cadastrarCliente(e) {
             email: dados.email_cliente, 
             senha: dados.senha, 
             segmento: dados.segmento, 
-            plano: dados.plano 
+            plano: dados.plano
+            valor_implantacao: dados.valor_implantacao
+            valor_mensalidade: dados.valor_mensalidade
         }])
         .select();
 
@@ -148,4 +150,25 @@ async function cadastrarCliente(e) {
         await carregarTabelaDoBanco();
         navegarAdmin('sec-clientes', document.querySelectorAll('.menu-item')[1]);
     }
+}
+function atualizarDashboard() {
+    let ativos = 0;
+    let suspensos = 0;
+    let receitaMensal = 0;
+
+    clientesReais.forEach(c => {
+        let statusAtual = c.status || 'ativo';
+        if (statusAtual === 'ativo') {
+            ativos++;
+            // Soma a mensalidade dos clientes ativos
+            receitaMensal += Number(c.valor_mensalidade) || 0; 
+        } else {
+            suspensos++;
+        }
+    });
+
+    // Injeta os valores reais nos Cards do HTML
+    document.querySelectorAll('.stat-card .value')[0].innerText = ativos;
+    document.querySelectorAll('.stat-card .value')[1].innerText = suspensos;
+    document.querySelectorAll('.stat-card .value')[2].innerText = `R$ ${receitaMensal.toFixed(2).replace('.', ',')}`;
 }
