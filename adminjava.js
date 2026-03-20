@@ -1,13 +1,13 @@
-// Simulador de Banco de Dados de Clientes para a Tabela
-let clientesFalsos = [
-    { id: 1, nome: "Clínica Saúde Total", seg: "Clínica", plano: "Supreme Super", status: "ativo" },
-    { id: 2, nome: "Burger Prime", seg: "Restaurante", plano: "Supreme Basic", status: "ativo" },
-    { id: 3, nome: "Pet Gold", seg: "Pet Shop", plano: "Supreme Basic", status: "suspenso" },
-    { id: 4, nome: "Tech Store", seg: "Loja", plano: "Supreme Elite", status: "ativo" }
-];
+// === CONEXÃO COM O BANCO DE DADOS (SUPABASE) ===
+const SUPABASE_URL = 'https://hhyvtehbsfoeuagwhklm.supabase.co';
+const SUPABASE_KEY = 'sb_publishable_S9oWEYBafLstrVI2SJQ9uA_ijH5Ph9e'; // <--- COLE SUA CHAVE AQUI
+
+const supabaseClient = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+
+let clientesReais = [];
 
 // 1. LOGIN MASTER
-function entrarAdmin(e) {
+async function entrarAdmin(e) {
     e.preventDefault();
     const senha = document.getElementById('admin-senha').value;
     
@@ -15,7 +15,9 @@ function entrarAdmin(e) {
     if(senha === 'master123') { 
         document.getElementById('login-admin').style.display = 'none';
         document.getElementById('admin-panel').style.display = 'flex';
-        carregarTabela();
+        
+        // Assim que entra, já busca os clientes reais no banco de dados!
+        await carregarTabelaDoBanco();
     } else {
         document.getElementById('erro-login').style.display = 'block';
     }
@@ -37,50 +39,55 @@ function navegarAdmin(idSecao, elementoMenu) {
     document.getElementById(idSecao).classList.add('active');
 }
 
-// 3. CARREGAR TABELA DE CLIENTES
-function carregarTabela() {
+// 3. BUSCAR E RENDERIZAR TABELA DO SUPABASE
+async function carregarTabelaDoBanco() {
     const tbody = document.getElementById('tabela-clientes');
-    tbody.innerHTML = ''; // Limpa antes de preencher
+    tbody.innerHTML = '<tr><td colspan="6" style="text-align:center;">Buscando dados no servidor...</td></tr>';
 
-    clientesFalsos.forEach(c => {
-        let badge = c.status === 'ativo' 
-            ? '<span class="badge badge-active">🟢 ATIVO</span>' 
-            : '<span class="badge badge-suspended">🔴 SUSPENSO</span>';
+    // Puxa todos os clientes da tabela SQL
+    const { data: clientes, error } = await supabaseClient
+        .from('clientes')
+        .select('*')
+        .order('id', { ascending: false }); // Do mais novo pro mais velho
+
+    if (error) {
+        tbody.innerHTML = '<tr><td colspan="6" style="text-align:center; color:red;">Erro ao buscar clientes.</td></tr>';
+        return;
+    }
+
+    clientesReais = clientes;
+    renderizarTabela();
+}
+
+function renderizarTabela() {
+    const tbody = document.getElementById('tabela-clientes');
+    tbody.innerHTML = ''; 
+
+    if (clientesReais.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="6" style="text-align:center;">Nenhum cliente cadastrado ainda.</td></tr>';
+        return;
+    }
+
+    clientesReais.forEach(c => {
+        let badge = '<span class="badge badge-active">🟢 ATIVO</span>';
         
-        let botaoAcao = c.status === 'ativo'
-            ? `<button class="btn-action suspend" onclick="mudarStatus(${c.id}, 'suspenso')">Cortar Acesso</button>`
-            : `<button class="btn-action reactivate" onclick="mudarStatus(${c.id}, 'ativo')">Reativar Conta</button>`;
-
         tbody.innerHTML += `
             <tr>
                 <td style="color: var(--primary);">#${c.id}</td>
-                <td style="color: #fff; font-weight: bold;">${c.nome}</td>
-                <td style="text-transform: capitalize;">${c.seg}</td>
-                <td>${c.plano}</td>
+                <td style="color: #fff; font-weight: bold;">${c.nome_empresa}</td>
+                <td style="text-transform: capitalize;">${c.segmento}</td>
+                <td style="text-transform: capitalize;">${c.plano}</td>
                 <td>${badge}</td>
                 <td>
-                    ${botaoAcao}
-                    <button class="btn-action" style="margin-left: 5px;" onclick="alert('Uma nova senha foi gerada e enviada para o cliente #${c.id}')">🔑 Resetar Senha</button>
+                    <button class="btn-action suspend" onclick="alert('O corte de acesso será habilitado via n8n em breve.')">Cortar Acesso</button>
+                    <button class="btn-action" style="margin-left: 5px;" onclick="alert('Senha deste cliente: ${c.senha}')">🔑 Ver Senha</button>
                 </td>
             </tr>
         `;
     });
 }
 
-// 4. MUDAR STATUS DO CLIENTE (O KILL SWITCH DE INADIMPLÊNCIA)
-function mudarStatus(id, novoStatus) {
-    const confirmacao = confirm(`Tem certeza que deseja mudar o status do cliente #${id} para ${novoStatus.toUpperCase()}?`);
-    if(confirmacao) {
-        // Futuro: Enviar Webhook para o n8n atualizar o MySQL
-        console.log(`Enviado para n8n: { acao: "mudar_status_cliente", id_cliente: ${id}, status: "${novoStatus}" }`);
-        
-        // Simulação visual para o painel
-        clientesFalsos.find(c => c.id === id).status = novoStatus;
-        carregarTabela();
-    }
-}
-
-// 5. GERADOR DE SENHA SEGURA PARA NOVOS CLIENTES
+// 4. GERADOR DE SENHA SEGURA PARA NOVOS CLIENTES
 function gerarSenha() {
     const caracteres = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789!@#";
     let senha = "";
@@ -90,25 +97,55 @@ function gerarSenha() {
     document.getElementById('senha-gerada').value = senha;
 }
 
-// 6. CADASTRAR NOVO CLIENTE (ENVIA PARA O N8N -> MYSQL)
-function cadastrarCliente(e) {
+// 5. CADASTRAR NOVO CLIENTE DE VERDADE NO SUPABASE
+async function cadastrarCliente(e) {
     e.preventDefault();
     const form = e.target;
     const formData = new FormData(form);
     const dados = Object.fromEntries(formData.entries());
 
-    // Este pacote vai para o n8n criar o cadastro real no SQL
-    const payload = {
-        acao: "criar_novo_cliente_master",
-        segredo_admin: "CHAVE_SECRETA_SUPREME",
-        dados_cliente: dados
-    };
+    const btnSubmit = form.querySelector('button[type="submit"]');
+    const txtOriginal = btnSubmit.innerText;
+    btnSubmit.innerText = "Criando no Servidor...";
 
-    console.log("🚀 Comando de criação para o n8n:", JSON.stringify(payload, null, 2));
+    // Passo A: Criar a conta na tabela 'clientes'
+    const { data: novoCliente, error: erroCliente } = await supabaseClient
+        .from('clientes')
+        .insert([{ 
+            nome_empresa: dados.nome_empresa, 
+            email: dados.email_cliente, 
+            senha: dados.senha, 
+            segmento: dados.segmento, 
+            plano: dados.plano 
+        }])
+        .select();
 
-    alert(`✅ Sucesso! O painel da empresa "${dados.nome_empresa}" foi criado no sistema.`);
-    form.reset();
-    
-    // Volta para a aba de gerenciar clientes
-    navegarAdmin('sec-clientes', document.querySelectorAll('.menu-item')[1]);
+    if (erroCliente) {
+        console.error(erroCliente);
+        alert("Erro: Este e-mail já pode estar cadastrado ou houve falha na rede.");
+        btnSubmit.innerText = txtOriginal;
+        return;
+    }
+
+    // Passo B: Criar a gaveta vazia na tabela 'configuracoes_robo'
+    const clienteId = novoCliente[0].id;
+    const { error: erroConfig } = await supabaseClient
+        .from('configuracoes_robo')
+        .insert([{ 
+            cliente_id: clienteId, 
+            dados_painel: {} 
+        }]);
+
+    btnSubmit.innerText = txtOriginal;
+
+    if (erroConfig) {
+        alert("Cliente criado com sucesso, mas houve erro ao gerar a gaveta de configurações.");
+    } else {
+        alert(`✅ Sucesso! O painel da empresa "${dados.nome_empresa}" já está online e pronto para uso.`);
+        form.reset();
+        
+        // Atualiza a tabela imediatamente e muda pra ela
+        await carregarTabelaDoBanco();
+        navegarAdmin('sec-clientes', document.querySelectorAll('.menu-item')[1]);
+    }
 }
