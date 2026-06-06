@@ -187,37 +187,38 @@ async function mudarStatus(id, novoStatus) {
     }
 }
 
-// ==========================================================================
-// 6. CADASTRO UNIFICADO DE EMPRESAS
-// ==========================================================================
-function gerarSenha() {
-    const caracteres = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789!@#";
-    let senha = "";
-    for (let i = 0; i < 8; i++) {
-        senha += caracteres.charAt(Math.floor(Math.random() * caracteres.length));
-    }
-    const senhaGerada = document.getElementById('senha-gerada');
-    if(senhaGerada) senhaGerada.value = senha;
-}
+// ... (mantenha as configurações de topo, login e tabela iguais) ...
 
+// ==========================================================================
+// 6. CADASTRO UNIFICADO DE EMPRESAS (COM ESCOLHA DE MÓDULOS)
+// ==========================================================================
 async function cadastrarCliente(e) {
     e.preventDefault();
     const form = e.target;
     const formData = new FormData(form);
     const dados = Object.fromEntries(formData.entries());
 
+    // CAPTURA OS MÓDULOS SELECIONADOS NO CHECKBOX
+    const modulosCheckbox = form.querySelectorAll('input[name="modulos_selecionados"]:checked');
+    const modulosArray = Array.from(modulosCheckbox).map(cb => cb.value);
+    const modulosString = modulosArray.join(','); // Ex: "dashboard,inbox,agenda"
+
+    if (modulosArray.length === 0) {
+        alert("Selecione pelo menos um módulo (ex: Dashboard) para o cliente.");
+        return;
+    }
+
     const btnSubmit = form.querySelector('button[type="submit"]');
     const txtOriginal = btnSubmit.innerText;
     btnSubmit.innerText = "Criando no Servidor...";
 
-    // 1. Cria a empresa na base de dados (O Painel Camaleão usará estes dados)
     const { data: novoCliente, error: erroCliente } = await supabaseClient
         .from('clientes')
         .insert([{ 
             nome_empresa: dados.nome_empresa, 
             email: dados.email_cliente, 
             senha: dados.senha, 
-            segmento: dados.segmento, // <--- O Painel do Cliente lerá isso para definir os menus
+            segmento: modulosString, // Salvamos a lista de módulos aqui!
             plano: dados.plano,
             valor_implantacao: dados.valor_implantacao, 
             valor_mensalidade: dados.valor_mensalidade,
@@ -227,55 +228,93 @@ async function cadastrarCliente(e) {
         .select();
 
     if (erroCliente) {
-        alert("Erro: Este e-mail já pode estar cadastrado ou ocorreu um problema.");
+        alert("Erro: Este e-mail já pode estar cadastrado.");
         console.error(erroCliente);
         btnSubmit.innerText = txtOriginal;
         return;
     }
 
-    // 2. Prepara a Gaveta de Configurações do Robô
     const clienteId = novoCliente[0].id;
     const { error: erroConfig } = await supabaseClient
         .from('configuracoes_robo')
-        .insert([{ 
-            cliente_id: clienteId, 
-            dados_painel: {},
-            modulos_ativos: [] // Preparado para o futuro caso você queira ativar módulos por API
-        }]);
+        .insert([{ cliente_id: clienteId, dados_painel: {} }]);
 
     btnSubmit.innerText = txtOriginal;
 
     if (erroConfig) {
-        alert("Cliente criado, mas houve erro ao gerar a gaveta de configurações.");
         console.error(erroConfig);
     } else {
-        alert(`✅ Sucesso! O painel da empresa "${dados.nome_empresa}" já está online e unificado.`);
+        alert(`✅ Sucesso! O painel da empresa "${dados.nome_empresa}" foi criado com os módulos: ${modulosString}`);
         form.reset();
         await carregarTabelaDoBanco();
-        
-        // Redireciona de volta para a tabela
-        const menuItemClientes = document.querySelectorAll('.menu-item')[1];
-        if(menuItemClientes) navegarAdmin('sec-clientes', menuItemClientes);
+        navegarAdmin('sec-clientes', document.querySelectorAll('.menu-item')[1]);
     }
 }
 
-// EXCLUIR CLIENTE PERMANENTEMENTE
-async function excluirCliente(id) {
-    const confirmacao = confirm(`🚨 ATENÇÃO EXTREMA: Tem certeza que deseja DELETAR o cliente #${id} permanentemente?\n\nTodos os dados, fluxos do Chatwoot e configurações dele serão apagados para sempre.`);
-    
-    if(confirmacao) {
-        const { error } = await supabaseClient
-            .from('clientes')
-            .delete()
-            .eq('id', id);
+// ==========================================================================
+// 7. SISTEMA DE EDIÇÃO DE CLIENTES (COM CHECKBOXES)
+// ==========================================================================
+function abrirModalEdicao(id) {
+    const cliente = clientesReais.find(c => c.id === id);
+    if (!cliente) return;
 
-        if (error) {
-            alert("Erro ao excluir cliente no servidor.");
-            console.error(error);
-        } else {
-            alert("Cliente excluído com sucesso. Acesso revogado.");
-            await carregarTabelaDoBanco(); 
-        }
+    document.getElementById('edit-id').value = cliente.id;
+    document.getElementById('edit-nome').value = cliente.nome_empresa || '';
+    document.getElementById('edit-email').value = cliente.email || '';
+    document.getElementById('edit-instancia').value = cliente.nome_instancia || '';
+    document.getElementById('edit-plano').value = cliente.plano || 'supreme start';
+    document.getElementById('edit-setup').value = cliente.valor_implantacao || 0;
+    document.getElementById('edit-mensalidade').value = cliente.valor_mensalidade || 0;
+    document.getElementById('edit-senha').value = cliente.senha || '';
+
+    // MARCA AS CAIXINHAS CORRETAS DE ACORDO COM O BANCO
+    const modulosAtivos = cliente.segmento ? cliente.segmento.split(',') : [];
+    document.querySelectorAll('#form-editar-cliente input[name="modulos_selecionados"]').forEach(cb => {
+        cb.checked = modulosAtivos.includes(cb.value);
+    });
+
+    const modal = document.getElementById('modal-edicao');
+    if(modal) modal.style.display = 'flex';
+}
+
+async function salvarEdicao(e) {
+    e.preventDefault();
+    const form = e.target;
+    const btnSubmit = form.querySelector('button[type="submit"]');
+    const txtOrig = btnSubmit.innerText;
+    
+    // CAPTURA OS MÓDULOS ATUALIZADOS
+    const modulosCheckbox = form.querySelectorAll('input[name="modulos_selecionados"]:checked');
+    const modulosString = Array.from(modulosCheckbox).map(cb => cb.value).join(',');
+
+    btnSubmit.innerText = "Atualizando Cofre...";
+    const id = document.getElementById('edit-id').value;
+    
+    const dadosAtualizados = {
+        nome_empresa: document.getElementById('edit-nome').value,
+        email: document.getElementById('edit-email').value,
+        nome_instancia: document.getElementById('edit-instancia').value,
+        segmento: modulosString, // Atualiza os módulos liberados
+        plano: document.getElementById('edit-plano').value,
+        valor_implantacao: document.getElementById('edit-setup').value,
+        valor_mensalidade: document.getElementById('edit-mensalidade').value,
+        senha: document.getElementById('edit-senha').value
+    };
+
+    const { error } = await supabaseClient
+        .from('clientes')
+        .update(dadosAtualizados)
+        .eq('id', id);
+
+    btnSubmit.innerText = txtOrig;
+
+    if (error) {
+        alert("Erro ao atualizar!");
+        console.error(error);
+    } else {
+        mostrarToast("✅ Dados e módulos atualizados com sucesso!", "success");
+        fecharModalEdicao();
+        await carregarTabelaDoBanco(); 
     }
 }
 
