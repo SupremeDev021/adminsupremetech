@@ -1,6 +1,8 @@
 const STORAGE_KEY = "supreme_platform_state_v2";
 const ADMIN_SESSION_KEY = "supreme_admin_session_v2";
 const SESSION_TIMEOUT_MS = 1000 * 60 * 60 * 4;
+const SUPABASE_URL = "https://hhyvtehbsfoeuagwhklm.supabase.co";
+const SUPABASE_KEY = "sb_publishable_S9oWEYBafLstrVI2SJQ9uA_ijH5Ph9e";
 
 const MODULES = {
   dashboard: { label: "Dashboard", icon: "layout-dashboard" },
@@ -87,7 +89,8 @@ function loadPlatform() {
 }
 
 function savePlatform() {
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(platform));
+  const snapshot = { ...platform, companies: [] };
+  localStorage.setItem(STORAGE_KEY, JSON.stringify(snapshot));
 }
 
 function loadAdminSession() {
@@ -116,7 +119,7 @@ async function handleAdminLogin(event) {
   adminSession = { startedAt: Date.now(), lastActivityAt: Date.now() };
   saveAdminSession();
   audit(null, "admin_login", "Login administrativo realizado");
-  openAdmin();
+  await openAdmin();
 }
 
 function restoreAdminSession() {
@@ -125,9 +128,14 @@ function restoreAdminSession() {
   openAdmin();
 }
 
-function openAdmin() {
+async function openAdmin() {
   document.getElementById("admin-auth").hidden = true;
   document.getElementById("admin-shell").hidden = false;
+  try {
+    await refreshCompaniesFromSupabase();
+  } catch (error) {
+    toast(error.message || "Nao foi possivel carregar empresas do Supabase.", "error");
+  }
   setSection(activeSection);
 }
 
@@ -275,8 +283,10 @@ function openCompanyModal(id) {
       <footer><button class="btn ghost" type="button" data-close-modal>Cancelar</button><button class="btn primary" type="submit">${icon("save")} Salvar</button></footer>
     </form>
   `);
-  document.getElementById("company-form").addEventListener("submit", event => {
+  document.getElementById("company-form").addEventListener("submit", async event => {
     event.preventDefault();
+    const submit = event.target.querySelector("button[type=submit]");
+    submit.disabled = true;
     const form = event.target;
     const data = Object.fromEntries(new FormData(form).entries());
     const modules = Array.from(form.querySelectorAll("input[name=modules]:checked")).map(input => input.value);
@@ -289,37 +299,58 @@ function openCompanyModal(id) {
       license: { status: data.licenseDue && new Date(data.licenseDue) < new Date() ? "expired" : "active", dueDate: data.licenseDue || null }
     });
     payload.users = payload.users?.length ? payload.users : [ownerUser(payload)];
-    upsertCompany(payload);
-    notify(payload.id, "Configuracao atualizada", "Modulos, plano ou licenca foram atualizados pela Supreme Tech.", "high");
-    audit(payload.id, company ? "company_updated" : "company_created", company ? "Empresa atualizada" : "Empresa criada");
-    closeModal();
-    renderCompanies();
-    renderDashboard();
+    try {
+      await upsertCompany(payload);
+      notify(payload.id, "Configuracao atualizada", "Modulos, plano ou licenca foram atualizados pela Supreme Tech.", "high");
+      audit(payload.id, company ? "company_updated" : "company_created", company ? "Empresa atualizada" : "Empresa criada");
+      await saveCompanyPanelData(payload);
+      closeModal();
+      await refreshCompaniesFromSupabase();
+      renderCompanies();
+      renderDashboard();
+      toast("Empresa sincronizada com Supabase.", "success");
+    } catch (error) {
+      toast(error.message || "Falha ao salvar empresa no Supabase.", "error");
+    } finally {
+      submit.disabled = false;
+    }
   });
 }
 
 window.editCompany = id => openCompanyModal(id);
 
-window.toggleCompany = id => {
+window.toggleCompany = async id => {
   const company = platform.companies.find(item => item.id === id);
   if (!company) return;
   company.status = company.status === "active" ? "suspended" : "active";
   notify(company.id, company.status === "active" ? "Acesso reativado" : "Acesso suspenso", "O status da empresa foi alterado pela administracao.", "high");
   audit(company.id, "company_status_changed", `Status alterado para ${statusLabel(company.status)}`);
-  savePlatform();
-  renderCompanies();
-  renderDashboard();
+  try {
+    await upsertCompany(company);
+    await saveCompanyPanelData(company);
+    await refreshCompaniesFromSupabase();
+    renderCompanies();
+    renderDashboard();
+  } catch (error) {
+    toast(error.message || "Falha ao alterar status no Supabase.", "error");
+  }
 };
 
-window.cancelCompany = id => {
+window.cancelCompany = async id => {
   const company = platform.companies.find(item => item.id === id);
   if (!company || !confirm("Cancelar esta empresa? O acesso sera bloqueado.")) return;
   company.status = "cancelled";
   audit(company.id, "company_cancelled", "Empresa cancelada");
   notify(company.id, "Empresa cancelada", "O acesso foi cancelado pela administracao.", "high");
-  savePlatform();
-  renderCompanies();
-  renderDashboard();
+  try {
+    await upsertCompany(company);
+    await saveCompanyPanelData(company);
+    await refreshCompaniesFromSupabase();
+    renderCompanies();
+    renderDashboard();
+  } catch (error) {
+    toast(error.message || "Falha ao cancelar no Supabase.", "error");
+  }
 };
 
 function renderPlans() {
@@ -452,7 +483,7 @@ function renderFinance() {
 window.renewLicense = id => updateLicense(id, "active");
 window.expireLicense = id => updateLicense(id, "expired");
 
-function updateLicense(id, status) {
+async function updateLicense(id, status) {
   const company = platform.companies.find(item => item.id === id);
   if (!company) return;
   company.license ||= {};
@@ -460,9 +491,14 @@ function updateLicense(id, status) {
   if (status === "active") company.license.dueDate = addMonths(new Date(), 1).toISOString().slice(0, 10);
   notify(company.id, status === "active" ? "Licenca renovada" : "Licenca vencida", status === "active" ? "Acesso reativado automaticamente." : "Acesso sujeito a bloqueio.", "high");
   audit(company.id, "license_status_changed", `Licenca alterada para ${licenseLabel(status)}`);
-  savePlatform();
-  renderFinance();
-  renderDashboard();
+  try {
+    await upsertCompany(company);
+    await saveCompanyPanelData(company);
+    renderFinance();
+    renderDashboard();
+  } catch (error) {
+    toast(error.message || "Falha ao atualizar licenca no Supabase.", "error");
+  }
 }
 
 function renderAudit() {
@@ -533,11 +569,138 @@ function ownerUser(company) {
   };
 }
 
-function upsertCompany(company) {
+async function refreshCompaniesFromSupabase() {
+  const [clients, configs] = await Promise.all([
+    supabaseRequest("/rest/v1/clientes?select=*&order=id.desc"),
+    supabaseRequest("/rest/v1/configuracoes_robo?select=*")
+  ]);
+  const configByClient = new Map((configs || []).map(item => [String(item.cliente_id), item.dados_painel || {}]));
+  platform.companies = (clients || []).map(row => companyFromSupabase(row, configByClient.get(String(row.id))));
+  platform.audit = platform.companies.flatMap(company => configByClient.get(company.id)?.audit || []);
+  platform.notifications = platform.companies.flatMap(company => configByClient.get(company.id)?.notifications || []);
+  savePlatform();
+}
+
+async function upsertCompany(company) {
+  const existingId = /^\d+$/.test(String(company.id || "")) ? company.id : null;
+  const row = companyToSupabase(company);
+  const savedRows = existingId
+    ? await supabaseRequest(`/rest/v1/clientes?id=eq.${encodeURIComponent(existingId)}&select=*`, { method: "PATCH", body: row, prefer: "return=representation" })
+    : await supabaseRequest("/rest/v1/clientes?select=*", { method: "POST", body: row, prefer: "return=representation" });
+  const saved = Array.isArray(savedRows) ? savedRows[0] : savedRows;
+  if (!saved?.id) throw new Error("Supabase nao retornou a empresa salva.");
+  company.id = String(saved.id);
   const index = platform.companies.findIndex(item => item.id === company.id);
   if (index >= 0) platform.companies[index] = company;
   else platform.companies.unshift(company);
-  savePlatform();
+  return company;
+}
+
+async function saveCompanyPanelData(company) {
+  if (!/^\d+$/.test(String(company.id))) return;
+  await supabaseRequest("/rest/v1/configuracoes_robo?on_conflict=cliente_id", {
+    method: "POST",
+    prefer: "resolution=merge-duplicates,return=minimal",
+    body: {
+      cliente_id: Number(company.id),
+      bot_desativado: company.status === "active" ? "NAO" : "SIM",
+      dados_painel: panelDataFromCompany(company),
+      atualizado_em: nowIso()
+    }
+  });
+}
+
+function companyFromSupabase(row, panel = {}) {
+  const modules = normalizeModules(panel.modules || row.segmento);
+  const status = fromSupabaseStatus(row.status);
+  const planId = panel.planId || row.plano || "";
+  const company = {
+    id: String(row.id),
+    name: row.nome_empresa || "Empresa sem nome",
+    email: row.email || "",
+    password: row.senha || "",
+    responsible: panel.responsible || "",
+    document: panel.document || "",
+    planId,
+    monthly: Number(row.valor_mensalidade || 0),
+    setup: Number(row.valor_implantacao || 0),
+    status,
+    modules,
+    license: panel.license || { status: status === "active" ? "active" : "suspended", dueDate: null },
+    data: panel.data || emptyCompanyData(),
+    users: panel.users || [],
+    rbac: panel.rbac || platform.roles,
+    brand: panel.brand || {},
+    createdAt: row.criado_em || panel.createdAt || nowIso(),
+    instanceName: row.nome_instancia || panel.instanceName || ""
+  };
+  company.users = company.users.length ? company.users : [ownerUser(company)];
+  return company;
+}
+
+function companyToSupabase(company) {
+  return {
+    nome_empresa: company.name,
+    email: company.email,
+    senha: company.password,
+    segmento: (company.modules || []).join(","),
+    plano: company.planId || "",
+    status: toSupabaseStatus(company.status),
+    valor_mensalidade: Number(company.monthly || 0),
+    valor_implantacao: Number(company.setup || 0),
+    nome_instancia: company.instanceName || company.name
+  };
+}
+
+function panelDataFromCompany(company) {
+  return {
+    responsible: company.responsible || "",
+    document: company.document || "",
+    planId: company.planId || "",
+    modules: company.modules || [],
+    license: company.license || { status: "active", dueDate: null },
+    users: company.users || [ownerUser(company)],
+    rbac: company.rbac || platform.roles,
+    data: company.data || emptyCompanyData(),
+    brand: company.brand || {},
+    audit: platform.audit.filter(item => item.companyId === company.id),
+    notifications: platform.notifications.filter(item => item.companyId === company.id),
+    updatedAt: nowIso()
+  };
+}
+
+function normalizeModules(raw) {
+  if (Array.isArray(raw)) return raw.filter(Boolean);
+  if (typeof raw === "string") return raw.split(/[,\s;|]+/).map(item => item.trim()).filter(Boolean);
+  return ["dashboard", "settings"];
+}
+
+function toSupabaseStatus(status) {
+  return ({ active: "ativo", suspended: "suspenso", cancelled: "cancelado" })[status] || status || "ativo";
+}
+
+function fromSupabaseStatus(status) {
+  return ({ ativo: "active", suspenso: "suspended", cancelado: "cancelled", active: "active", suspended: "suspended", cancelled: "cancelled" })[status] || "active";
+}
+
+async function supabaseRequest(path, options = {}) {
+  const response = await fetch(`${SUPABASE_URL}${path}`, {
+    method: options.method || "GET",
+    headers: {
+      apikey: SUPABASE_KEY,
+      Authorization: `Bearer ${SUPABASE_KEY}`,
+      "Content-Type": "application/json",
+      ...(options.prefer ? { Prefer: options.prefer } : {})
+    },
+    body: options.body ? JSON.stringify(options.body) : undefined
+  });
+  if (!response.ok) {
+    const message = await response.text();
+    throw new Error(message || `Erro Supabase ${response.status}`);
+  }
+  if (response.status === 204) return null;
+  const text = await response.text();
+  return text ? JSON.parse(text) : null;
 }
 
 function allPermissions() {

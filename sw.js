@@ -1,4 +1,4 @@
-const CACHE_NAME = "supreme-platform-admin-v3";
+const CACHE_NAME = "supreme-platform-admin-v4";
 const CORE_ASSETS = [
   "./index.html",
   "./admin.css",
