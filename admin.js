@@ -79,10 +79,12 @@ function loadPlatform() {
     notifications: [],
     finance: {},
     security: { sessionTimeoutMinutes: 240, rateLimitPerMinute: 60 },
+    integrations: defaultIntegrations(),
     version: 2
   };
   try {
-    return { ...base, ...(JSON.parse(localStorage.getItem(STORAGE_KEY)) || {}) };
+    const saved = JSON.parse(localStorage.getItem(STORAGE_KEY)) || {};
+    return { ...base, ...saved, integrations: mergeIntegrations(saved.integrations) };
   } catch {
     return base;
   }
@@ -156,6 +158,17 @@ function bindEvents() {
   on("new-module", "click", () => openModuleModal());
   on("new-role", "click", () => openRoleModal());
   on("security-form", "submit", saveSecurity);
+  on("refresh-integrations", "click", renderIntegrations);
+  on("chatwoot-form", "submit", saveChatwootIntegration);
+  on("n8n-form", "submit", saveN8nIntegration);
+  on("evolution-form", "submit", saveEvolutionIntegration);
+  on("test-chatwoot", "click", testChatwootConnection);
+  on("sync-chatwoot", "click", syncChatwoot);
+  on("test-n8n-workflow", "click", testN8nWorkflow);
+  on("test-n8n-webhook", "click", testN8nWebhook);
+  on("test-evolution", "click", testEvolution);
+  on("sync-evolution", "click", syncEvolution);
+  on("test-supabase", "click", testSupabaseConnection);
 }
 
 function setSection(section) {
@@ -167,6 +180,7 @@ function setSection(section) {
     companies: renderCompanies,
     plans: renderPlans,
     modules: renderModules,
+    integrations: renderIntegrations,
     rbac: renderRoles,
     finance: renderFinance,
     audit: renderAudit,
@@ -271,6 +285,7 @@ function renderCompanies() {
 
 function openCompanyModal(id) {
   const company = platform.companies.find(item => item.id === id);
+  const companyIntegrations = defaultCompanyIntegrations(company, company?.integrations);
   const moduleChecks = platform.modules.map(module => `<label class="field"><span><input name="modules" type="checkbox" value="${module.key}" ${(company?.modules || []).includes(module.key) ? "checked" : ""}> ${escapeHtml(module.name)}</span></label>`).join("");
   openModal(company ? "Editar empresa" : "Nova empresa", `
     <form id="company-form" class="stack">
@@ -281,6 +296,7 @@ function openCompanyModal(id) {
       <div class="form-row">${selectField("status", "Status", ["active", "suspended", "cancelled"], company?.status || "active")}${inputField("licenseDue", "Vencimento da licenca", company?.license?.dueDate || "", "date")}</div>
       <div class="panel"><h2>Dashboard principal</h2><div class="form-row">${selectField("dashboardMode", "Visao da Home", [{ value: "both", label: "Leads e Agenda" }, { value: "leads", label: "Somente Leads" }, { value: "agenda", label: "Somente Agenda" }, { value: "none", label: "Desativar ambos" }], company?.dashboardConfig?.mode || "both")}${inputField("instanceName", "Nome da instancia", company?.instance?.name || company?.instanceName || "", "text")}</div></div>
       <div class="panel"><h2>Dados da instancia</h2><div class="form-row">${inputField("instanceId", "ID da instancia", company?.instance?.id || "", "text")}${inputField("instanceUrl", "URL da instancia", company?.instance?.url || "", "url")}</div><div class="form-row">${inputField("instanceToken", "Token", company?.instance?.token || "", "text")}${selectField("instanceIntegration", "Integracao utilizada", ["Evolution API", "Z-API", "WPPConnect", "UltraMsg", "Outra"], company?.instance?.integration || "Evolution API")}</div></div>
+      <div class="panel"><h2>Integracoes da empresa</h2><div class="form-row">${optionalInputField("companyChatwootAccountId", "Chatwoot Account ID", companyIntegrations.chatwoot.accountId)}${optionalInputField("companyChatwootInboxId", "Chatwoot Inbox ID", companyIntegrations.chatwoot.inboxId)}</div><div class="form-row">${optionalInputField("companyEvolutionInstanceName", "Evolution - Nome da instancia", companyIntegrations.evolution.instanceName)}${optionalInputField("companyEvolutionNumber", "Evolution - Numero", companyIntegrations.evolution.number)}</div><div class="form-row">${optionalInputField("companyN8nWorkflow", "N8N - Workflow da empresa", companyIntegrations.n8n.workflow)}</div><p class="muted">Esses dados vinculam a empresa ao fluxo WhatsApp > Chatwoot > N8N > Supabase. Tokens e URLs internas permanecem no dashboard administrativo.</p></div>
       <div class="panel"><h2>Modulos liberados</h2><div class="settings-grid">${moduleChecks}</div></div>
       <footer><button class="btn ghost" type="button" data-close-modal>Cancelar</button><button class="btn primary" type="submit">${icon("save")} Salvar</button></footer>
     </form>
@@ -306,6 +322,29 @@ function openCompanyModal(id) {
         url: data.instanceUrl || "",
         token: data.instanceToken || "",
         integration: data.instanceIntegration || "Evolution API"
+      },
+      integrations: {
+        chatwoot: {
+          accountId: data.companyChatwootAccountId || "",
+          inboxId: data.companyChatwootInboxId || "",
+          status: data.companyChatwootAccountId && data.companyChatwootInboxId ? "configured" : "not_configured",
+          lastSync: companyIntegrations.chatwoot.lastSync,
+          lastError: companyIntegrations.chatwoot.lastError || ""
+        },
+        evolution: {
+          instanceName: data.companyEvolutionInstanceName || data.instanceName || "",
+          number: data.companyEvolutionNumber || "",
+          status: data.companyEvolutionInstanceName || data.companyEvolutionNumber ? "configured" : "not_configured",
+          lastSync: companyIntegrations.evolution.lastSync,
+          lastError: companyIntegrations.evolution.lastError || ""
+        },
+        n8n: {
+          workflow: data.companyN8nWorkflow || "",
+          status: data.companyN8nWorkflow ? "configured" : "not_configured",
+          lastSync: companyIntegrations.n8n.lastSync,
+          lastError: companyIntegrations.n8n.lastError || ""
+        },
+        updatedAt: nowIso()
       }
     });
     payload.users = payload.users?.length ? payload.users : [ownerUser(payload)];
@@ -490,6 +529,228 @@ function renderFinance() {
   `).join("") : "<tr><td colspan='6'>Nenhuma cobranca cadastrada.</td></tr>";
 }
 
+function renderIntegrations() {
+  platform.integrations = mergeIntegrations(platform.integrations);
+  const { chatwoot, n8n, evolution, supabase } = platform.integrations;
+  setInputValue("chatwoot-url", chatwoot.url);
+  setInputValue("chatwoot-account-id", chatwoot.accountId);
+  setInputValue("chatwoot-inbox-id", chatwoot.inboxId);
+  setInputValue("chatwoot-api-token", chatwoot.apiToken);
+  setInputValue("n8n-url", n8n.url);
+  setInputValue("n8n-main-webhook", n8n.mainWebhook);
+  setInputValue("n8n-workflow", n8n.workflow);
+  setInputValue("n8n-api-key", n8n.apiKey);
+  setInputValue("evolution-instance-name", evolution.instanceName);
+  setInputValue("evolution-number", evolution.number);
+  setInputValue("evolution-url", evolution.url);
+  setInputValue("evolution-token", evolution.token);
+  renderIntegrationStatus("chatwoot", chatwoot);
+  renderIntegrationStatus("n8n", n8n);
+  renderIntegrationStatus("evolution", evolution);
+  renderIntegrationStatus("supabase", supabase);
+  setText("supabase-project", supabase.project);
+  setText("supabase-url", supabase.url);
+  setText("supabase-tables", supabase.tables.join(", "));
+  setText("supabase-last-sync", supabase.lastSync ? formatDate(supabase.lastSync) : "Nunca");
+  renderIntegrationKpis();
+  renderCompanyIntegrationsTable();
+}
+
+function renderIntegrationKpis() {
+  const configuredCompanies = platform.companies.filter(company => companyIntegrationHealth(company).configured).length;
+  const critical = ["chatwoot", "n8n", "evolution", "supabase"].filter(key => ["error", "offline"].includes(platform.integrations[key]?.status)).length;
+  document.getElementById("integration-kpis").innerHTML = [
+    metric("Servicos monitorados", 4, "Chatwoot, N8N, Evolution e Supabase"),
+    metric("Empresas configuradas", configuredCompanies, "Com pelo menos uma integracao vinculada"),
+    metric("Alertas tecnicos", critical, "Falhas de conexao ou sincronizacao"),
+    metric("Fluxo principal", integrationFlowStatus(), "WhatsApp > CRM Supreme")
+  ].join("");
+}
+
+function renderCompanyIntegrationsTable() {
+  document.getElementById("company-integrations-table").innerHTML = platform.companies.length ? platform.companies.map(company => {
+    const integrations = defaultCompanyIntegrations(company, company.integrations);
+    const rules = company.data?.crmRoutingRules?.length || 0;
+    const updatedAt = integrations.updatedAt || company.updatedAt || company.createdAt;
+    return `
+      <tr>
+        <td><strong>${escapeHtml(company.name)}</strong><br><span class="muted">${escapeHtml(company.email)}</span></td>
+        <td>${companyIntegrationPill(integrations.chatwoot, integrations.chatwoot.accountId && integrations.chatwoot.inboxId)}</td>
+        <td>${companyIntegrationPill(integrations.evolution, integrations.evolution.instanceName && integrations.evolution.number)}</td>
+        <td>${companyIntegrationPill(integrations.n8n, integrations.n8n.workflow)}</td>
+        <td>${rules ? `${rules} regra(s)` : "Sem regras"}</td>
+        <td>${updatedAt ? formatDate(updatedAt) : "Nunca"}</td>
+      </tr>
+    `;
+  }).join("") : "<tr><td colspan='6'>Nenhuma empresa cadastrada para monitoramento.</td></tr>";
+}
+
+function companyIntegrationPill(config, hasRequiredFields) {
+  const status = config?.status && config.status !== "not_configured" ? config.status : (hasRequiredFields ? "configured" : "not_configured");
+  return `<span class="status-pill ${status}">${integrationStatusLabel(status)}</span>`;
+}
+
+function companyIntegrationHealth(company) {
+  const integrations = defaultCompanyIntegrations(company, company.integrations);
+  return {
+    configured: Boolean(
+      integrations.chatwoot.accountId ||
+      integrations.chatwoot.inboxId ||
+      integrations.evolution.instanceName ||
+      integrations.evolution.number ||
+      integrations.n8n.workflow
+    )
+  };
+}
+
+function integrationFlowStatus() {
+  const statuses = ["chatwoot", "n8n", "evolution", "supabase"].map(key => platform.integrations[key]?.status);
+  if (statuses.every(status => ["connected", "synced"].includes(status))) return "Conectado";
+  if (statuses.some(status => ["configured", "connected", "synced"].includes(status))) return "Parcial";
+  return "Aguardando";
+}
+
+function saveChatwootIntegration(event) {
+  event.preventDefault();
+  Object.assign(platform.integrations.chatwoot, {
+    url: value("chatwoot-url"),
+    accountId: value("chatwoot-account-id"),
+    inboxId: value("chatwoot-inbox-id"),
+    apiToken: value("chatwoot-api-token"),
+    status: hasChatwootConfig() ? "configured" : "not_configured",
+    lastError: ""
+  });
+  audit(null, "chatwoot_integration_saved", "Configuracao global do Chatwoot salva");
+  savePlatform();
+  renderIntegrations();
+  toast("Configuracao do Chatwoot salva no Admin.", "success");
+}
+
+function saveN8nIntegration(event) {
+  event.preventDefault();
+  Object.assign(platform.integrations.n8n, {
+    url: value("n8n-url"),
+    mainWebhook: value("n8n-main-webhook"),
+    workflow: value("n8n-workflow"),
+    apiKey: value("n8n-api-key"),
+    status: hasN8nConfig() ? "configured" : "not_configured",
+    lastError: ""
+  });
+  audit(null, "n8n_integration_saved", "Configuracao global do N8N salva");
+  savePlatform();
+  renderIntegrations();
+  toast("Configuracao do N8N salva no Admin.", "success");
+}
+
+function saveEvolutionIntegration(event) {
+  event.preventDefault();
+  Object.assign(platform.integrations.evolution, {
+    instanceName: value("evolution-instance-name"),
+    number: value("evolution-number"),
+    url: value("evolution-url"),
+    token: value("evolution-token"),
+    status: hasEvolutionConfig() ? "configured" : "not_configured",
+    lastError: ""
+  });
+  audit(null, "evolution_integration_saved", "Configuracao global da Evolution API salva");
+  savePlatform();
+  renderIntegrations();
+  toast("Configuracao da Evolution API salva no Admin.", "success");
+}
+
+async function testChatwootConnection() {
+  saveChatwootIntegration(new Event("submit"));
+  const cfg = platform.integrations.chatwoot;
+  if (!hasChatwootConfig()) return failIntegration("chatwoot", "Informe URL, Account ID e API Token antes de testar.");
+  await testIntegration("chatwoot", async () => fetchJson(`${trimSlash(cfg.url)}/api/v1/accounts/${encodeURIComponent(cfg.accountId)}`, {
+    headers: { api_access_token: cfg.apiToken }
+  }));
+}
+
+async function syncChatwoot() {
+  saveChatwootIntegration(new Event("submit"));
+  const cfg = platform.integrations.chatwoot;
+  if (!hasChatwootConfig() || !cfg.inboxId) return failIntegration("chatwoot", "Informe URL, Account ID, Inbox ID e API Token para sincronizar.");
+  await testIntegration("chatwoot", async () => fetchJson(`${trimSlash(cfg.url)}/api/v1/accounts/${encodeURIComponent(cfg.accountId)}/inboxes/${encodeURIComponent(cfg.inboxId)}`, {
+    headers: { api_access_token: cfg.apiToken }
+  }), "synced");
+}
+
+async function testN8nWorkflow() {
+  saveN8nIntegration(new Event("submit"));
+  const cfg = platform.integrations.n8n;
+  if (!cfg.url || !cfg.workflow || !cfg.apiKey) {
+    if (cfg.mainWebhook) return testN8nWebhook();
+    return failIntegration("n8n", "Informe URL, Workflow e API Key ou um Webhook principal.");
+  }
+  await testIntegration("n8n", async () => fetchJson(`${trimSlash(cfg.url)}/api/v1/workflows/${encodeURIComponent(cfg.workflow)}`, {
+    headers: { "X-N8N-API-KEY": cfg.apiKey }
+  }));
+}
+
+async function testN8nWebhook() {
+  saveN8nIntegration(new Event("submit"));
+  const cfg = platform.integrations.n8n;
+  if (!cfg.mainWebhook) return failIntegration("n8n", "Informe o Webhook principal do N8N.");
+  await testIntegration("n8n", async () => fetchJson(cfg.mainWebhook, {
+    method: "POST",
+    headers: { ...(cfg.apiKey ? { "X-N8N-API-KEY": cfg.apiKey } : {}) },
+    body: JSON.stringify({ source: "supreme-admin-test", timestamp: nowIso() })
+  }), "synced");
+}
+
+async function testEvolution() {
+  saveEvolutionIntegration(new Event("submit"));
+  const cfg = platform.integrations.evolution;
+  if (!hasEvolutionConfig()) return failIntegration("evolution", "Informe URL da API, nome da instancia e token.");
+  await testIntegration("evolution", async () => fetchJson(`${trimSlash(cfg.url)}/instance/connectionState/${encodeURIComponent(cfg.instanceName)}`, {
+    headers: { apikey: cfg.token }
+  }));
+}
+
+async function syncEvolution() {
+  saveEvolutionIntegration(new Event("submit"));
+  const cfg = platform.integrations.evolution;
+  if (!cfg.url || !cfg.token) return failIntegration("evolution", "Informe URL da API e token para sincronizar.");
+  await testIntegration("evolution", async () => fetchJson(`${trimSlash(cfg.url)}/instance/fetchInstances`, {
+    headers: { apikey: cfg.token }
+  }), "synced");
+}
+
+async function testSupabaseConnection() {
+  await testIntegration("supabase", async () => Promise.all([
+    supabaseRequest("/rest/v1/clientes?select=id&limit=1"),
+    supabaseRequest("/rest/v1/configuracoes_robo?select=cliente_id&limit=1")
+  ]));
+}
+
+async function testIntegration(key, runner, successStatus = "connected") {
+  setIntegrationStatus(key, "checking", "");
+  try {
+    await runner();
+    setIntegrationStatus(key, successStatus, "");
+    audit(null, `${key}_integration_tested`, `Integracao ${key} validada com sucesso`);
+    toast(`Conexao ${key} validada.`, "success");
+  } catch (error) {
+    failIntegration(key, readableIntegrationError(error));
+  }
+}
+
+function failIntegration(key, message) {
+  setIntegrationStatus(key, "error", message);
+  audit(null, `${key}_integration_failed`, message);
+  toast(message, "error");
+}
+
+function setIntegrationStatus(key, status, error = "") {
+  platform.integrations = mergeIntegrations(platform.integrations);
+  platform.integrations[key].status = status;
+  platform.integrations[key].lastSync = nowIso();
+  platform.integrations[key].lastError = error;
+  savePlatform();
+  renderIntegrations();
+}
+
 window.renewLicense = id => updateLicense(id, "active");
 window.expireLicense = id => updateLicense(id, "expired");
 
@@ -563,6 +824,47 @@ function defaultDashboardConfig() {
     visibleKinds: { kpi: true, chart: true, table: true, ranking: true, calendar: true },
     order: ["appointments_overview", "leads_overview", "conversations_overview", "tasks_overview", "goals_overview", "revenue_overview"],
     hiddenWidgets: []
+  };
+}
+
+function defaultIntegrations() {
+  return {
+    chatwoot: { url: "", accountId: "", inboxId: "", apiToken: "", status: "not_configured", lastSync: null, lastError: "" },
+    n8n: { url: "", mainWebhook: "", workflow: "", apiKey: "", status: "not_configured", lastSync: null, lastError: "" },
+    evolution: { instanceName: "", number: "", url: "", token: "", status: "not_configured", lastSync: null, lastError: "" },
+    supabase: {
+      project: "SupremeDev021's Project",
+      url: SUPABASE_URL,
+      tables: ["clientes", "configuracoes_robo", "demo_clinica"],
+      status: "connected",
+      lastSync: null,
+      lastError: ""
+    }
+  };
+}
+
+function mergeIntegrations(current = {}) {
+  const base = defaultIntegrations();
+  return {
+    chatwoot: { ...base.chatwoot, ...(current.chatwoot || {}) },
+    n8n: { ...base.n8n, ...(current.n8n || {}) },
+    evolution: { ...base.evolution, ...(current.evolution || {}) },
+    supabase: { ...base.supabase, ...(current.supabase || {}), url: SUPABASE_URL }
+  };
+}
+
+function defaultCompanyIntegrations(company = {}, current = {}) {
+  const base = {
+    chatwoot: { accountId: "", inboxId: "", status: "not_configured", lastSync: null, lastError: "" },
+    evolution: { instanceName: company.instance?.name || company.instanceName || "", number: "", status: "not_configured", lastSync: null, lastError: "" },
+    n8n: { workflow: "", status: "not_configured", lastSync: null, lastError: "" },
+    updatedAt: null
+  };
+  return {
+    chatwoot: { ...base.chatwoot, ...(current.chatwoot || {}) },
+    evolution: { ...base.evolution, ...(current.evolution || {}) },
+    n8n: { ...base.n8n, ...(current.n8n || {}) },
+    updatedAt: current.updatedAt || null
   };
 }
 
@@ -656,7 +958,8 @@ function companyFromSupabase(row, panel = {}) {
     dashboardConfig: panel.dashboardConfig || defaultDashboardConfig(),
     createdAt: row.criado_em || panel.createdAt || nowIso(),
     instanceName: row.nome_instancia || panel.instance?.name || panel.instanceName || "",
-    instance: panel.instance || { name: row.nome_instancia || "", id: "", url: "", token: "", integration: "Evolution API" }
+    instance: panel.instance || { name: row.nome_instancia || "", id: "", url: "", token: "", integration: "Evolution API" },
+    integrations: defaultCompanyIntegrations({ instance: panel.instance, instanceName: row.nome_instancia || panel.instanceName || "" }, panel.integrations)
   };
   company.users = company.users.length ? company.users : [ownerUser(company)];
   return company;
@@ -689,6 +992,7 @@ function panelDataFromCompany(company) {
     brand: company.brand || {},
     dashboardConfig: company.dashboardConfig || defaultDashboardConfig(),
     instance: company.instance || { name: company.instanceName || "", id: "", url: "", token: "", integration: "Evolution API" },
+    integrations: defaultCompanyIntegrations(company, company.integrations),
     audit: platform.audit.filter(item => item.companyId === company.id),
     notifications: platform.notifications.filter(item => item.companyId === company.id),
     updatedAt: nowIso()
@@ -769,6 +1073,10 @@ function inputField(name, label, currentValue = "", type = "text") {
   return `<label class="field">${label}<input name="${name}" type="${type}" value="${escapeAttr(currentValue ?? "")}" ${type !== "password" ? "required" : ""}></label>`;
 }
 
+function optionalInputField(name, label, currentValue = "", type = "text") {
+  return `<label class="field">${label}<input name="${name}" type="${type}" value="${escapeAttr(currentValue ?? "")}"></label>`;
+}
+
 function selectField(name, label, options, selected = "") {
   const normalized = options.map(item => typeof item === "string" ? { value: item, label: item } : item);
   return `<label class="field">${label}<select name="${name}">${normalized.map(item => `<option value="${escapeAttr(item.value)}" ${String(item.value) === String(selected) ? "selected" : ""}>${escapeHtml(item.label)}</option>`).join("")}</select></label>`;
@@ -797,6 +1105,11 @@ function on(id, event, handler) {
   document.getElementById(id)?.addEventListener(event, handler);
 }
 
+function setInputValue(id, currentValue = "") {
+  const el = document.getElementById(id);
+  if (el) el.value = currentValue || "";
+}
+
 function value(id) {
   return document.getElementById(id)?.value.trim() || "";
 }
@@ -804,6 +1117,78 @@ function value(id) {
 function setText(id, text) {
   const el = document.getElementById(id);
   if (el) el.textContent = text;
+}
+
+function renderIntegrationStatus(key, config) {
+  const statusEl = document.getElementById(`${key}-status`);
+  const syncEl = document.getElementById(`${key}-last-sync`);
+  const errorEl = document.getElementById(`${key}-error`);
+  if (statusEl) {
+    statusEl.className = `status-pill ${config.status || "not_configured"}`;
+    statusEl.textContent = integrationStatusLabel(config.status);
+  }
+  if (syncEl) syncEl.textContent = config.lastSync ? formatDate(config.lastSync) : "Nunca";
+  if (errorEl) errorEl.textContent = config.lastError || "";
+}
+
+function integrationStatusLabel(status) {
+  return ({
+    connected: "Conectado",
+    synced: "Sincronizado",
+    configured: "Configurado",
+    checking: "Verificando",
+    error: "Erro",
+    offline: "Offline",
+    not_configured: "Nao configurado"
+  })[status] || "Nao configurado";
+}
+
+function hasChatwootConfig() {
+  const cfg = platform.integrations.chatwoot;
+  return Boolean(cfg.url && cfg.accountId && cfg.apiToken);
+}
+
+function hasN8nConfig() {
+  const cfg = platform.integrations.n8n;
+  return Boolean(cfg.mainWebhook || (cfg.url && cfg.workflow));
+}
+
+function hasEvolutionConfig() {
+  const cfg = platform.integrations.evolution;
+  return Boolean(cfg.url && cfg.instanceName && cfg.token);
+}
+
+function trimSlash(raw) {
+  return String(raw || "").replace(/\/+$/, "");
+}
+
+async function fetchJson(url, options = {}) {
+  const response = await fetch(url, {
+    method: options.method || "GET",
+    headers: {
+      Accept: "application/json",
+      "Content-Type": "application/json",
+      ...(options.headers || {})
+    },
+    body: options.body
+  });
+  if (!response.ok) {
+    const message = await response.text();
+    throw new Error(message || `HTTP ${response.status}`);
+  }
+  const text = await response.text();
+  if (!text) return null;
+  try {
+    return JSON.parse(text);
+  } catch {
+    return text;
+  }
+}
+
+function readableIntegrationError(error) {
+  const message = error?.message || "Falha ao validar integracao.";
+  if (message.includes("Failed to fetch")) return "Falha de conexao. Verifique URL, NGINX, HTTPS e CORS do servico.";
+  return message.slice(0, 220);
 }
 
 function nowIso() {

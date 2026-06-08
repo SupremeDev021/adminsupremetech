@@ -6,7 +6,7 @@
   <meta name="description" content="Painel Administrativo Supreme Tech para controle SaaS, empresas, planos, modulos, licencas e auditoria.">
   <meta name="theme-color" content="#070b16">
   <title>Supreme Tech | Painel Administrativo</title>
-  <link rel="stylesheet" href="admin.css?v=20260607-4">
+  <link rel="stylesheet" href="admin.css?v=20260607-5">
 </head>
 <body>
   <section id="admin-auth" class="auth-screen">
@@ -36,6 +36,7 @@
         <button data-section="companies" type="button"><span data-icon="building-2"></span><span>Empresas</span></button>
         <button data-section="plans" type="button"><span data-icon="badge-dollar-sign"></span><span>Planos</span></button>
         <button data-section="modules" type="button"><span data-icon="blocks"></span><span>Marketplace</span></button>
+        <button data-section="integrations" type="button"><span data-icon="workflow"></span><span>Integracoes</span></button>
         <button data-section="rbac" type="button"><span data-icon="users-round"></span><span>RBAC</span></button>
         <button data-section="finance" type="button"><span data-icon="chart-no-axes-combined"></span><span>Financeiro</span></button>
         <button data-section="audit" type="button"><span data-icon="list-checks"></span><span>Auditoria</span></button>
@@ -106,6 +107,89 @@
         <div id="modules-grid" class="cards-grid"></div>
       </section>
 
+      <section id="section-integrations" class="module">
+        <header class="module-header">
+          <div>
+            <p class="eyebrow">Observabilidade operacional</p>
+            <h1>Dashboard de integracoes</h1>
+            <p class="muted">Monitoramento interno da Supreme Tech para Chatwoot, N8N, Evolution API e Supabase. O cliente nao visualiza tokens, URLs internas ou status tecnico.</p>
+          </div>
+          <button id="refresh-integrations" class="btn secondary" type="button"><span data-icon="refresh-cw"></span> Atualizar</button>
+        </header>
+        <div id="integration-kpis" class="dashboard-grid"></div>
+        <div class="integrations-layout">
+          <article class="panel integration-card">
+            <div class="panel-heading"><div><p class="eyebrow">Atendimento</p><h2>Chatwoot</h2></div><span id="chatwoot-status" class="status-pill not_configured">Nao configurado</span></div>
+            <form id="chatwoot-form" class="stack">
+              <label class="field">URL do Chatwoot<input id="chatwoot-url" type="url" placeholder="https://chatwoot.seudominio.com"></label>
+              <div class="form-row">
+                <label class="field">Account ID<input id="chatwoot-account-id" type="text"></label>
+                <label class="field">Inbox ID<input id="chatwoot-inbox-id" type="text"></label>
+              </div>
+              <label class="field">API Token<input id="chatwoot-api-token" type="password" autocomplete="off"></label>
+              <div class="integration-actions">
+                <button id="test-chatwoot" class="btn ghost" type="button">Testar conexao</button>
+                <button id="sync-chatwoot" class="btn ghost" type="button">Sincronizar</button>
+                <button class="btn primary" type="submit"><span data-icon="save"></span> Salvar</button>
+              </div>
+            </form>
+            <div class="integration-foot"><span>Ultima sincronizacao: <strong id="chatwoot-last-sync">Nunca</strong></span><small id="chatwoot-error"></small></div>
+          </article>
+
+          <article class="panel integration-card">
+            <div class="panel-heading"><div><p class="eyebrow">Automacoes</p><h2>N8N</h2></div><span id="n8n-status" class="status-pill not_configured">Nao configurado</span></div>
+            <form id="n8n-form" class="stack">
+              <label class="field">URL do N8N<input id="n8n-url" type="url" placeholder="https://n8n.seudominio.com"></label>
+              <label class="field">Webhook principal<input id="n8n-main-webhook" type="url"></label>
+              <div class="form-row">
+                <label class="field">Workflow principal<input id="n8n-workflow" type="text"></label>
+                <label class="field">API Key opcional<input id="n8n-api-key" type="password" autocomplete="off"></label>
+              </div>
+              <div class="integration-actions">
+                <button id="test-n8n-workflow" class="btn ghost" type="button">Testar workflow</button>
+                <button id="test-n8n-webhook" class="btn ghost" type="button">Testar webhook</button>
+                <button class="btn primary" type="submit"><span data-icon="save"></span> Salvar</button>
+              </div>
+            </form>
+            <div class="integration-foot"><span>Ultima sincronizacao: <strong id="n8n-last-sync">Nunca</strong></span><small id="n8n-error"></small></div>
+          </article>
+
+          <article class="panel integration-card">
+            <div class="panel-heading"><div><p class="eyebrow">WhatsApp</p><h2>Evolution API</h2></div><span id="evolution-status" class="status-pill not_configured">Nao configurado</span></div>
+            <form id="evolution-form" class="stack">
+              <div class="form-row">
+                <label class="field">Nome da instancia<input id="evolution-instance-name" type="text"></label>
+                <label class="field">Numero<input id="evolution-number" type="text"></label>
+              </div>
+              <label class="field">URL da API<input id="evolution-url" type="url" placeholder="https://evolution.seudominio.com"></label>
+              <label class="field">Token<input id="evolution-token" type="password" autocomplete="off"></label>
+              <div class="integration-actions">
+                <button id="test-evolution" class="btn ghost" type="button">Testar instancia</button>
+                <button id="sync-evolution" class="btn ghost" type="button">Sincronizar</button>
+                <button class="btn primary" type="submit"><span data-icon="save"></span> Salvar</button>
+              </div>
+            </form>
+            <div class="integration-foot"><span>Ultima sincronizacao: <strong id="evolution-last-sync">Nunca</strong></span><small id="evolution-error"></small></div>
+          </article>
+
+          <article class="panel integration-card">
+            <div class="panel-heading"><div><p class="eyebrow">Banco de dados</p><h2>Supabase</h2></div><span id="supabase-status" class="status-pill connected">Conectado</span></div>
+            <div class="audit-list">
+              <div><span>Projeto</span><strong id="supabase-project">SupremeDev021's Project</strong></div>
+              <div><span>URL</span><strong id="supabase-url">https://hhyvtehbsfoeuagwhklm.supabase.co</strong></div>
+              <div><span>Tabelas principais</span><strong id="supabase-tables">clientes, configuracoes_robo, demo_clinica</strong></div>
+              <div><span>Ultima verificacao</span><strong id="supabase-last-sync">Nunca</strong></div>
+            </div>
+            <button id="test-supabase" class="btn secondary" type="button">Verificar Supabase</button>
+            <div class="integration-foot"><small id="supabase-error"></small></div>
+          </article>
+        </div>
+        <article class="panel integration-monitor">
+          <div class="panel-heading"><div><p class="eyebrow">Multiempresa</p><h2>Status das empresas conectadas</h2></div><span data-icon="activity"></span></div>
+          <div class="table-panel"><table><thead><tr><th>Empresa</th><th>Chatwoot</th><th>Evolution</th><th>N8N</th><th>Regras CRM</th><th>Ultima atualizacao</th></tr></thead><tbody id="company-integrations-table"></tbody></table></div>
+        </article>
+      </section>
+
       <section id="section-rbac" class="module">
         <header class="module-header">
           <div><p class="eyebrow">Governanca</p><h1>Perfis e permissoes</h1></div>
@@ -132,7 +216,7 @@
         <div class="settings-grid">
           <article class="panel"><h2>Politicas de sessao</h2><form id="security-form" class="stack"><label class="field">Timeout de sessao em minutos<input id="session-timeout" type="number" min="5" value="240"></label><label class="field">Rate limit por minuto<input id="rate-limit" type="number" min="1" value="60"></label><button class="btn primary" type="submit"><span data-icon="save"></span> Salvar politicas</button></form></article>
           <article class="panel"><h2>Gateways preparados</h2><p class="muted">Stripe, Mercado Pago e Asaas ficam prontos como adaptadores. As chaves devem ser configuradas no backend seguro.</p></article>
-          <article class="panel"><h2>Integracoes futuras</h2><p class="muted">Supabase, n8n, Chatwoot, provedores de IA e webhooks devem ser ligados pela camada services/integrations.</p></article>
+          <article class="panel"><h2>Chaves sensiveis</h2><p class="muted">Tokens tecnicos ficam restritos ao painel administrativo e, em producao plena, devem ser movidos para backend seguro ou Edge Functions.</p></article>
         </div>
       </section>
     </main>
@@ -140,6 +224,6 @@
 
   <div id="modal-root" class="modal-root" hidden></div>
   <div id="toast-root" class="toast-root" aria-live="polite"></div>
-  <script src="admin.js?v=20260607-4"></script>
+  <script src="admin.js?v=20260607-5"></script>
 </body>
 </html>
